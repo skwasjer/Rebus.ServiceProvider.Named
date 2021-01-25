@@ -1,0 +1,208 @@
+
+This library allows you to use multiple Rebus instances in a single application context. This enables you to send and receive messages using different transports, configuration, etc. and also be able to bridge sending to another bus.
+
+## IBus vs INamedBus vs ITypedBus<>
+
+This library introduces a couple of new interfaces to differentiate between `IBus` and named/typed bus instances. The application code will  have to be slightly modified in order to be able to mix and differentiate between multiple buses.
+
+The following bus types can be resolved in/outside message context:
+
+| Bus type      | Description                                                           | In message context | Outside of message context |
+| ------------- | --------------------------------------------------------------------- | ------------------ | -------------------------- |
+| `IBus`        | Rebus' own bus interface                                                 | Yes                | No*                         |
+| `INamedBus`   | Used icw. `INamedBusFactory`                                          | Yes                | Yes                        |
+| `ITypedBus<>` | Can be used to inject a specific bus instance by using a marker type | Yes                | Yes                        |
+
+> \* This library changes the way the `IBus` type can be resolved from the dependency injection container (it does not change the functional implementation however). See below for more information why it can no longer be used outside of message context.
+
+### `INamedBus`
+
+Each instance of a named or typed bus is registered as a `INamedBus` in the service container. It subclasses `IBus` to provide seamless transition in application code from `IBus` to `INamedBus`.
+
+To register a named bus:
+
+```csharp
+class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Register using a name.
+        services.AddNamedRebus("sqs-bus", c => c
+            // F.ex. configure SQS transport
+        );
+    }
+}
+```
+
+Typically, you will get an instance of a named bus by using `INamedBusFactory` instead of directly injecting it.
+
+### `INamedBusFactory`
+
+With multiple buses one obvious problem is that is no longer possible to request a specific instance of `IBus` or `IBusStarter`, at least, not outside of the scope of a Rebus handler (more on this later).
+
+Instead, inject the `INamedBusFactory` and request the bus instance by name:
+
+```csharp
+[ApiController]
+public class MyController : ControllerBase
+{
+    private INamedBus _sqsBus;
+
+    public MyController(INamedBusFactory namedBusFactory)
+    {
+        _sqsBus = _namedBusFactory.Get("sqs-bus");
+    }
+
+    public Task<IActionResult> PostAsync()
+    {
+        return _sqsBus.Send(new MyMessage());
+    }
+}
+```
+
+### `ITypedBus<>`
+
+While using the factory gives you direct access to all bus instances by name, it is somewhat harder to write unit tests, since the factory now has to be mocked. You can therefor also choose to register a bus as a typed bus which will register the bus as a `ITypedBus<>`:
+
+```csharp
+// Bus name marker class.
+public class SnsBus { }
+
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Register using a type marker.
+        services.AddTypedRebus<SnsBus>(c => c
+            // F.ex. configure Sns transport
+        );
+    }
+}
+```
+
+Using a typed bus, you can request it using dependency injection directly:
+
+```csharp
+public class MyService
+{
+    private ITypedBus<SnsBus> _snsBus;
+
+    public MyService(ITypedBus<SnsBus> snsBus)
+    {
+        _snsBus = snsBus;
+    }
+}
+```
+
+You can also still request the bus by name however:
+
+```csharp
+// Resolves the same bus but by name
+INamedBus namedBus = _namedBusFactory.Get(nameof(SnsBus));
+```
+
+## Message context and injecting owning IBus
+
+As mentioned before, injecting the `IBus` outside of a message context is no longer possible when using this library, due to the the fact that the dependency injection container no longer knows which instance to inject.
+
+It is still possible however to inject a bus of type `IBus` inside of a message context, simply because of the fact that the message is coming from a specific bus instance:
+
+```csharp
+public class MyMessageHandler : IHandleMessages<MyMessage>
+{
+    public MyMessageHandler(IBus bus)
+    {
+        // 'bus' is the instance that MyMessage is consumed from.
+    }
+}
+```
+
+## A complete example
+
+```csharp
+// Bus name marker class.
+public class SnsBus { }
+
+public class MyMessage { }
+public class MyMessageProcessed { }
+
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddTransient<Service1>(); // For controller
+
+        services
+            // Register handler implementations.
+            .AddRebusHandler<Service1>();
+
+        // Register using a name.
+        services.AddNamedRebus("sqs-bus", c => c
+        // F.ex. configure SQS transport
+        );
+
+        // Register using a type marker.
+        services.AddTypedRebus<SnsBus>(c => c
+        // F.ex. configure Sns transport
+        );
+    }
+
+    public void Configure(IApplicationBuilder app)
+    {
+        // Start both buses.
+        app.UseNamedRebus("sqs-bus");
+        app.UseTypedRebus<SnsBus>(bus => bus.Advanced.SyncBus.Subscribe(typeof(MyMessageProcessed)));
+    }
+}
+
+[ApiController]
+public class MyServiceController : ControllerBase
+{
+    private readonly Service1 _service;
+
+    public MyServiceController(Service1 service)
+    {
+        _service = service;
+    }
+
+    public async Task<IActionResult> PostAsync()
+    {
+        await _service.StartLongProcess();
+        return Accepted();
+    }
+}
+
+public class Service1 : IHandleMessages<MyMessage>, IHandleMessages<MyMessageProcessed>
+{
+    private readonly ITypedBus<SnsBus> _snsBus;
+    private readonly INamedBus _sqsBus;
+
+    public Service1(INamedBusFactory busFactory, ITypedBus<SnsBus> snsBus)
+    {
+        _sqsBus = busFactory.Get("sqs-bus");
+        _snsBus = snsBus;
+    }
+
+    public Task StartLongProcess()
+    {
+        // Sending a command to SQS.
+        return _sqsBus.Send(new MyMessage());
+    }
+
+    public Task Handle(MyMessage message)
+    {
+        // Received via SQS bus, but we're publishing event to SNS bus.
+        return _snsBus.Publish(new MyMessageProcessed());
+    }
+
+    public Task Handle(MyMessageProcessed message)
+    {
+        // Received through SNS, message has been processed.
+        return Task.CompletedTask;
+    }
+}
+```
+
+## Caveats / limitations
+
+The transaction context is not shared between multiple bus instances, and thus a message sent to another bus instance from inside a message handler may already be in-flight since that bus is not enlisted in the same transaction context. There is not much that can be done from the perspective of this library. The author of message handlers should carefully consider idempotency and more-than-once message delivery semantics.

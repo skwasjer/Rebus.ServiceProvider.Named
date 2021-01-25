@@ -13,12 +13,13 @@ using Rebus.Pipeline;
 using Rebus.Routing.TypeBased;
 using Rebus.Transport.InMem;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Rebus.ServiceProvider.Named
 {
     public class IntegrationTests : IDisposable
     {
-        public class Bus2 { }
+	    public class Bus2 { }
 
         public class MyMessage { }
         public class MyMessageProcessed { }
@@ -72,9 +73,9 @@ namespace Rebus.ServiceProvider.Named
             }
         }
 
-        public IntegrationTests()
+        public IntegrationTests(ITestOutputHelper testOutputHelper)
         {
-            _callbackMock = new Mock<Action<string>>();
+	        _callbackMock = new Mock<Action<string>>();
 
             _serviceProvider = new ServiceCollection()
                 .AddSingleton(_callbackMock.Object)
@@ -82,10 +83,14 @@ namespace Rebus.ServiceProvider.Named
                 .AddRebusHandler<Service1>()
 
                 .AddNamedRebus("bus1", c => c
+	                .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
+	                .Options(o => o.LogPipeline())
                     .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "bus1-queue"))
                     .Routing(r => r.TypeBased().MapFallback("bus1-queue"))
                 )
                 .AddTypedRebus<Bus2>(c => c
+	                .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
+	                .Options(o => o.LogPipeline())
                     .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "bus2-queue"))
                     .Subscriptions(s => s.StoreInMemory(new InMemorySubscriberStore()))
                 )
@@ -145,7 +150,7 @@ namespace Rebus.ServiceProvider.Named
             await service.StartLongProcess();
 
             // Assert
-            eventWasReceived.WaitOne(TimeSpan.FromSeconds(5));
+            eventWasReceived.WaitOne(TimeSpan.FromSeconds(30));
             log.Should()
                 .BeEquivalentTo(new[]
                     {

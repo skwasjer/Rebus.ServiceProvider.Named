@@ -133,8 +133,7 @@ namespace Rebus.ServiceProvider.Named
             // and do not need to request the by name or type.
             services.TryAddScoped<IBus>(s =>
             {
-                IMessageContext
-                    messageContext = s.GetRequiredService<IMessageContext>(); // This will throw if not in message context.
+                IMessageContext messageContext = s.GetRequiredService<IMessageContext>(); // This will throw if not in message context.
                 string busName = messageContext.IncomingStepContext.Load<string>(StepContextKeys.BusName);
                 // Return a bus for this scope which does not dispose the actual bus
                 // because it is a singleton and should not be disposed until the app terminates.

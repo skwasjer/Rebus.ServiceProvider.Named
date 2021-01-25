@@ -12,13 +12,13 @@ namespace Rebus.ServiceProvider.Named
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<string, NamedBusOptions> _busOptions;
-        private readonly Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, INamedBusStarter)> _buses;
+        private readonly Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)> _buses;
 
         public NamedBusFactory(IEnumerable<NamedBusOptions> busOptions, IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _busOptions = busOptions?.ToDictionary(b => b.Name) ?? throw new ArgumentNullException(nameof(busOptions));
-            _buses = new Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, INamedBusStarter)>();
+            _buses = new Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)>();
         }
 
         public INamedBus Get(string name) => GetStarter(name).Bus;
@@ -30,7 +30,7 @@ namespace Rebus.ServiceProvider.Named
                 throw new ArgumentNullException(nameof(name));
             }
 
-            if (_buses.TryGetValue(name, out (Microsoft.Extensions.DependencyInjection.ServiceProvider, INamedBusStarter) v))
+            if (_buses.TryGetValue(name, out (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter) v))
             {
                 return v.Item2;
             }
@@ -43,7 +43,7 @@ namespace Rebus.ServiceProvider.Named
             throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
         }
 
-        private (Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider, INamedBusStarter namedBusStarter) CreateBusStarter(NamedBusOptions busOptions)
+        private (Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider, NamedBusStarter namedBusStarter) CreateBusStarter(NamedBusOptions busOptions)
         {
             // Use a new service container to mount this Rebus instance.
             IServiceCollection innerServices = new ServiceCollection()
@@ -63,14 +63,19 @@ namespace Rebus.ServiceProvider.Named
 
             Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();
             IBusStarter busStarter = innerServiceProvider.GetRequiredService<IBusStarter>();
-            return (innerServiceProvider, new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus)));
+            return (innerServiceProvider, CreateBusStarter(busOptions, busStarter));
+        }
+
+        private static NamedBusStarter CreateBusStarter(NamedBusOptions busOptions, IBusStarter busStarter)
+        {
+	        return new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus));
         }
 
         public void Dispose()
         {
-            foreach ((Microsoft.Extensions.DependencyInjection.ServiceProvider s, INamedBusStarter bs) in _buses.Values)
+            foreach ((Microsoft.Extensions.DependencyInjection.ServiceProvider s, NamedBusStarter bs) in _buses.Values)
             {
-                bs.Bus.Dispose();
+                ((NamedBus)bs.Bus).InnerBus.Dispose();
                 s.Dispose();
             }
         }

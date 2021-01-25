@@ -31,16 +31,6 @@ namespace Rebus.ServiceProvider.Named
             {
                 _sut = new NamedBus("", _decoratedBus.Object);
             }
-
-            [Fact]
-            public void When_disposing_it_should_call_decorated()
-            {
-                // Act
-                _sut.Dispose();
-
-                // Assert
-                _decoratedBus.Verify(m => m.Dispose(), Times.Once);
-            }
         }
 
         public class TypedBusTests : DecoratedBusTests
@@ -49,19 +39,19 @@ namespace Rebus.ServiceProvider.Named
             {
                 _sut = new TypedBus<FakeBusName>(_decoratedBus.Object);
             }
-
-            [Fact]
-            public void When_disposing_it_should_call_decorated()
-            {
-                // Act
-                _sut.Dispose();
-
-                // Assert
-                _decoratedBus.Verify(m => m.Dispose(), Times.Once);
-            }
         }
 
         [Fact]
+        public void When_disposing_it_should_not_call_decorated()
+        {
+	        // Act
+	        _sut.Dispose();
+
+	        // Assert
+	        _decoratedBus.Verify(m => m.Dispose(), Times.Never);
+        }
+
+		[Fact]
         public async Task When_sending_local_it_should_call_decorated()
         {
             // Act

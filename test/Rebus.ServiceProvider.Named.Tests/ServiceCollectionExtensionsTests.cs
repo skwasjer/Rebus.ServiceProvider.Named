@@ -78,6 +78,38 @@ namespace Rebus.ServiceProvider.Named
         }
 
         [Fact]
+        public void When_disposing_scope_it_should_not_dispose_bus_resolved_from_message_context()
+        {
+	        _sut.AddNamedRebus(BusName1, MemoryBusConfigurationHelper.ConfigureForInMem);
+	        Microsoft.Extensions.DependencyInjection.ServiceProvider serviceProvider = _sut.BuildServiceProvider();
+
+	        var messageContext = new TestMessageContext(new object());
+	        messageContext.IncomingStepContext.Save(StepContextKeys.BusName, BusName1);
+	        AmbientTransactionContext.SetCurrent(messageContext.TransactionContext);
+
+	        using IServiceScope serviceScope = serviceProvider.CreateScope();
+
+			try
+			{
+		        // Hydrate bus.
+		        var bus = (NamedBus)serviceScope.ServiceProvider.GetRequiredService<IBus>();
+		        bus.Advanced.Workers.SetNumberOfWorkers(1);
+
+		        // Act
+		        serviceScope.Dispose();
+
+		        // Assert
+		        bus.Advanced.Workers.Count.Should().Be(1);
+	        }
+	        finally
+	        {
+		        // In case exception/assertion fails.
+				serviceScope.Dispose();
+		        serviceProvider.Dispose();
+	        }
+        }
+
+		[Fact]
         public void Given_that_named_rebus_is_added_when_resolving_service_inside_of_message_context_it_should_resolve_expected_services()
         {
             _sut.AddNamedRebus(BusName1, MemoryBusConfigurationHelper.ConfigureForInMem);

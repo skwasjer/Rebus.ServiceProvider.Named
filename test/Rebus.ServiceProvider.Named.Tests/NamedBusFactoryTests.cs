@@ -146,7 +146,26 @@ namespace Rebus.ServiceProvider.Named
                 .Be(nameof(name));
         }
 
-        public void Dispose()
+        [Fact]
+        public void When_disposing_it_should_dispose_each_bus_instance()
+        {
+	        INamedBus bus1 = _sut.Get("bus1");
+	        INamedBus bus2 = _sut.Get("bus2");
+	        INamedBus bus3 = _sut.Get("bus3");
+	        bus1.Advanced.Workers.SetNumberOfWorkers(1);
+	        bus2.Advanced.Workers.SetNumberOfWorkers(0);
+	        bus3.Advanced.Workers.SetNumberOfWorkers(3);
+
+			// Act
+			_sut.Dispose();
+
+			// Assert
+			bus1.Advanced.Workers.Count.Should().Be(0);
+			bus2.Advanced.Workers.Count.Should().Be(0);
+			bus3.Advanced.Workers.Count.Should().Be(0);
+        }
+
+		public void Dispose()
         {
             (_serviceProvider as IDisposable)?.Dispose();
             _sut?.Dispose();

@@ -17,7 +17,7 @@ namespace Rebus.ServiceProvider.Named
 
         public void Dispose()
         {
-            InnerBus.Dispose();
+			// Disposal is handled by factory.
         }
 
         public Task SendLocal(object commandMessage, IDictionary<string, string> optionalHeaders = null)

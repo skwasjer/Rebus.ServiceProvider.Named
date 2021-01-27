@@ -49,13 +49,13 @@ namespace Rebus.ServiceProvider.Named
             return services
                 .AddNamedRebus(name, configure)
                 // Register the typed bus.
-                .AddSingleton<ITypedBus<TName>>(s => 
+                .AddSingleton<ITypedBus<TName>>(s =>
                     new TypedBus<TName>(s.GetRequiredService<INamedBusFactory>().Get(name))
                 );
         }
 
         /// <summary>
-        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="INamedBus"/> by name.
+        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="IBus"/> by name.
         /// </summary>
         /// <remarks>Note that instance names must be unique.</remarks>
         /// <param name="services">The service collection in which to register the typed bus instance, and in which handlers will be registered.</param>
@@ -73,7 +73,7 @@ namespace Rebus.ServiceProvider.Named
         }
 
         /// <summary>
-        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="INamedBus"/> by name.
+        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="IBus"/> by name.
         /// </summary>
         /// <remarks>Note that instance names must be unique.</remarks>
         /// <param name="services">The service collection in which to register the typed bus instance, and in which handlers will be registered.</param>
@@ -116,7 +116,7 @@ namespace Rebus.ServiceProvider.Named
                     Name = name
                 })
                 // Allow resolving all named/typed bus and starters.
-                .AddSingleton(s => s.GetRequiredService<INamedBusFactory>().Get(name))
+                //                .AddSingleton(s => s.GetRequiredService<INamedBusFactory>().Get(name))
                 .AddSingleton(s => s.GetRequiredService<INamedBusFactory>().GetStarter(name));
 
             return TryAddSharedServices(services);

@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Rebus.Activation;
+using Rebus.Bus;
 using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
@@ -21,7 +22,7 @@ namespace Rebus.ServiceProvider.Named
             _buses = new Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)>();
         }
 
-        public INamedBus Get(string name) => GetStarter(name).Bus;
+        public IBus Get(string name) => ((NamedBusStarter)GetStarter(name)).Bus;
 
         public INamedBusStarter GetStarter(string name)
         {
@@ -68,7 +69,7 @@ namespace Rebus.ServiceProvider.Named
 
         private static NamedBusStarter CreateBusStarter(NamedBusOptions busOptions, IBusStarter busStarter)
         {
-	        return new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus));
+            return new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus));
         }
 
         public void Dispose()

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Rebus.Bus;
 using Rebus.Pipeline;
 using Xunit;
 
@@ -68,7 +69,7 @@ namespace Rebus.ServiceProvider.Named
         public void Given_multiple_registered_buses_when_getting_by_name_it_should_return_expected(string busName)
         {
             // Act
-            INamedBus actual = _sut.Get(busName);
+            IBus actual = _sut.Get(busName);
 
             // Assert
             actual.Should()
@@ -98,8 +99,8 @@ namespace Rebus.ServiceProvider.Named
             const string busName = "bus2";
 
             // Act
-            INamedBus actual1 = _sut.Get(busName);
-            INamedBus actual2 = _sut.Get(busName);
+            IBus actual1 = _sut.Get(busName);
+            IBus actual2 = _sut.Get(busName);
 
             // Assert
             actual1.Should().BeSameAs(actual2);
@@ -121,7 +122,7 @@ namespace Rebus.ServiceProvider.Named
 
             // Act
             INamedBusStarter actual = _sut.GetStarter(busName);
-            INamedBus bus = actual.Start();
+            IBus bus = actual.Start();
 
             await bus.SendLocal(new FakeMessage());
 
@@ -149,23 +150,23 @@ namespace Rebus.ServiceProvider.Named
         [Fact]
         public void When_disposing_it_should_dispose_each_bus_instance()
         {
-	        INamedBus bus1 = _sut.Get("bus1");
-	        INamedBus bus2 = _sut.Get("bus2");
-	        INamedBus bus3 = _sut.Get("bus3");
-	        bus1.Advanced.Workers.SetNumberOfWorkers(1);
-	        bus2.Advanced.Workers.SetNumberOfWorkers(0);
-	        bus3.Advanced.Workers.SetNumberOfWorkers(3);
+            IBus bus1 = _sut.Get("bus1");
+            IBus bus2 = _sut.Get("bus2");
+            IBus bus3 = _sut.Get("bus3");
+            bus1.Advanced.Workers.SetNumberOfWorkers(1);
+            bus2.Advanced.Workers.SetNumberOfWorkers(0);
+            bus3.Advanced.Workers.SetNumberOfWorkers(3);
 
-			// Act
-			_sut.Dispose();
+            // Act
+            _sut.Dispose();
 
-			// Assert
-			bus1.Advanced.Workers.Count.Should().Be(0);
-			bus2.Advanced.Workers.Count.Should().Be(0);
-			bus3.Advanced.Workers.Count.Should().Be(0);
+            // Assert
+            bus1.Advanced.Workers.Count.Should().Be(0);
+            bus2.Advanced.Workers.Count.Should().Be(0);
+            bus3.Advanced.Workers.Count.Should().Be(0);
         }
 
-		public void Dispose()
+        public void Dispose()
         {
             (_serviceProvider as IDisposable)?.Dispose();
             _sut?.Dispose();

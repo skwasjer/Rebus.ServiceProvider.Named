@@ -8,22 +8,18 @@ namespace Rebus.ServiceProvider.Named
     {
         private readonly IBusStarter _originalBusStarter;
 
-        public NamedBusStarter(IBusStarter originalBusStarter, INamedBus namedBus)
+        public NamedBusStarter(IBusStarter originalBusStarter, IBus namedBus)
         {
             _originalBusStarter = originalBusStarter ?? throw new ArgumentNullException(nameof(originalBusStarter));
             Bus = namedBus ?? throw new ArgumentNullException(nameof(namedBus));
         }
 
-        public INamedBus Start()
+        public IBus Bus { get; }
+
+        public IBus Start()
         {
             _originalBusStarter.Start();
             return Bus;
         }
-
-        public INamedBus Bus { get; }
-
-        IBus IBusStarter.Bus => Bus;
-
-        IBus IBusStarter.Start() => Start();
     }
 }

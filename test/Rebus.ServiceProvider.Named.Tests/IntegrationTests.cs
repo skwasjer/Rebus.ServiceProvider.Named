@@ -19,7 +19,7 @@ namespace Rebus.ServiceProvider.Named
 {
     public class IntegrationTests : IDisposable
     {
-	    public class Bus2 { }
+        public class Bus2 { }
 
         public class MyMessage { }
         public class MyMessageProcessed { }
@@ -30,7 +30,7 @@ namespace Rebus.ServiceProvider.Named
         public class Service1 : IHandleMessages<MyMessageProcessed>, IHandleMessages<MyMessage>
         {
             private readonly ITypedBus<Bus2> _bus2;
-            private readonly INamedBus _bus1;
+            private readonly IBus _bus1;
             private readonly Action<string> _callback;
 
             public Service1(INamedBusFactory busFactory, ITypedBus<Bus2> bus2, Action<string> messageCallback)
@@ -48,8 +48,8 @@ namespace Rebus.ServiceProvider.Named
 
             public Task Handle(MyMessage message)
             {
-                INamedBus thisBus = GetThisBus();
-                _callback?.Invoke($"command handled by: {thisBus.Name}");
+                IBus thisBus = GetThisBus();
+                _callback?.Invoke($"command handled by: {thisBus}");
 
                 // Received via bus1, but we're publishing event to Bus2.
                 return _bus2.Publish(new MyMessageProcessed());
@@ -57,16 +57,16 @@ namespace Rebus.ServiceProvider.Named
 
             public Task Handle(MyMessageProcessed message)
             {
-                INamedBus thisBus = GetThisBus();
-                _callback?.Invoke($"event handled by: {thisBus.Name}");
+                IBus thisBus = GetThisBus();
+                _callback?.Invoke($"event handled by: {thisBus}");
 
                 // Received through Bus2, message has been processed.
                 return Task.CompletedTask;
             }
 
-            private static INamedBus GetThisBus()
+            private static IBus GetThisBus()
             {
-                return (INamedBus)MessageContext.Current
+                return MessageContext.Current
                     .IncomingStepContext.Load<IServiceScope>()
                     .ServiceProvider
                     .GetRequiredService<IBus>();
@@ -75,7 +75,7 @@ namespace Rebus.ServiceProvider.Named
 
         public IntegrationTests(ITestOutputHelper testOutputHelper)
         {
-	        _callbackMock = new Mock<Action<string>>();
+            _callbackMock = new Mock<Action<string>>();
 
             _serviceProvider = new ServiceCollection()
                 .AddSingleton(_callbackMock.Object)
@@ -83,14 +83,14 @@ namespace Rebus.ServiceProvider.Named
                 .AddRebusHandler<Service1>()
 
                 .AddNamedRebus("bus1", c => c
-	                .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
-	                .Options(o => o.LogPipeline())
+                    .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
+                    .Options(o => o.LogPipeline())
                     .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "bus1-queue"))
                     .Routing(r => r.TypeBased().MapFallback("bus1-queue"))
                 )
                 .AddTypedRebus<Bus2>(c => c
-	                .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
-	                .Options(o => o.LogPipeline())
+                    .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
+                    .Options(o => o.LogPipeline())
                     .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "bus2-queue"))
                     .Subscriptions(s => s.StoreInMemory(new InMemorySubscriberStore()))
                 )
@@ -100,13 +100,14 @@ namespace Rebus.ServiceProvider.Named
         [Fact]
         public void Given_that_named_bus_is_registered_when_requesting_instance_it_should_not_throw()
         {
-            Func<INamedBus> act = () => _serviceProvider.GetRequiredService<INamedBusFactory>().Get("bus1");
+            Func<IBus> act = () => _serviceProvider.GetRequiredService<INamedBusFactory>().Get("bus1");
 
-            INamedBus namedBus = act.Should()
+            act.Should()
                 .NotThrow()
-                .Which;
-            namedBus.Should().NotBeNull();
-            namedBus.Name.Should().Be("bus1");
+                .Which.Should()
+                .BeOfType<NamedBus>()
+                .Which.Name.Should()
+                .Be("bus1");
         }
 
         [Fact]
@@ -114,11 +115,13 @@ namespace Rebus.ServiceProvider.Named
         {
             Func<ITypedBus<Bus2>> act = () => _serviceProvider.GetRequiredService<ITypedBus<Bus2>>();
 
-            INamedBus namedBus = act.Should()
+            act.Should()
                 .NotThrow()
-                .Which;
-            namedBus.Should().NotBeNull();
-            namedBus.Name.Should().Be(TypedBus<Bus2>.GetName());
+                .Which
+                .Should()
+                .BeOfType<TypedBus<Bus2>>()
+                .Which.Name.Should()
+                .Be(TypedBus<Bus2>.GetName());
         }
 
         [Fact]
@@ -154,8 +157,8 @@ namespace Rebus.ServiceProvider.Named
             log.Should()
                 .BeEquivalentTo(new[]
                     {
-                        "command handled by: bus1",
-                        "event handled by: Bus2"
+                        "command handled by: RebusBus bus1",
+                        "event handled by: RebusBus Bus2"
                     },
                     opts => opts.WithStrictOrdering());
         }

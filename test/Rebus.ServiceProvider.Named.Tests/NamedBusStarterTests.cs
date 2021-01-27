@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using FluentAssertions;
 using Moq;
+using Rebus.Bus;
 using Rebus.Config;
 using Xunit;
 
@@ -10,20 +11,20 @@ namespace Rebus.ServiceProvider.Named
     public class NamedBusStarterTests
     {
         private readonly Mock<IBusStarter> _originalBusStarterMock;
-        private readonly Mock<INamedBus> _namedBusMock;
+        private readonly Mock<IBus> _namedBusMock;
         private readonly NamedBusStarter _sut;
 
         public NamedBusStarterTests()
         {
             _originalBusStarterMock = new Mock<IBusStarter>();
-            _namedBusMock = new Mock<INamedBus>();
+            _namedBusMock = new Mock<IBus>();
 
             _sut = new NamedBusStarter(_originalBusStarterMock.Object, _namedBusMock.Object);
         }
 
         [Theory]
         [MemberData(nameof(CtorNullArgTestCases))]
-        public void Given_null_arg_when_creating_instance_it_should_throw(IBusStarter originalBusStarter, INamedBus namedBus, string expectedParamName)
+        public void Given_null_arg_when_creating_instance_it_should_throw(IBusStarter originalBusStarter, IBus namedBus, string expectedParamName)
         {
             // ReSharper disable once ObjectCreationAsStatement
             Action act = () => new NamedBusStarter(originalBusStarter, namedBus);
@@ -51,7 +52,7 @@ namespace Rebus.ServiceProvider.Named
         public void When_starting_bus_it_should_return_start_ctor_bus_and_return_it()
         {
             // Act & assert
-            INamedBus actual = _sut.Start();
+            IBus actual = _sut.Start();
 
             // Assert
             actual.Should().BeSameAs(_namedBusMock.Object);
@@ -63,7 +64,7 @@ namespace Rebus.ServiceProvider.Named
         public static IEnumerable<object[]> CtorNullArgTestCases()
         {
             IBusStarter originalBusStarter = Mock.Of<IBusStarter>();
-            INamedBus namedBus = Mock.Of<INamedBus>();
+            IBus namedBus = Mock.Of<IBus>();
 
             yield return new object[] { null, namedBus, nameof(originalBusStarter) };
             yield return new object[] { originalBusStarter, null, nameof(namedBus) };

@@ -46,7 +46,7 @@ namespace Rebus.ServiceProvider.Named
         private ITransactionContext CreateTransactionContextMock()
         {
             var items = new ConcurrentDictionary<string, object>();
-            
+
             var mock = new Mock<ITransactionContext>();
             mock.Setup(m => m.Items).Returns(items);
 

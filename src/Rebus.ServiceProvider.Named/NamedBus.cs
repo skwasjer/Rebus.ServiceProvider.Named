@@ -7,7 +7,7 @@ using Rebus.Bus.Advanced;
 
 namespace Rebus.ServiceProvider.Named
 {
-    internal class NamedBus : INamedBus
+    internal class NamedBus : IBus
     {
         internal NamedBus(string name, IBus bus)
         {
@@ -17,7 +17,7 @@ namespace Rebus.ServiceProvider.Named
 
         public void Dispose()
         {
-			// Disposal is handled by factory.
+            // Disposal is handled by factory.
         }
 
         public Task SendLocal(object commandMessage, IDictionary<string, string> optionalHeaders = null)
@@ -76,5 +76,8 @@ namespace Rebus.ServiceProvider.Named
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         internal IBus InnerBus { get; }
+
+        /// <inheritdoc />
+        public override string ToString() => InnerBus.ToString();
     }
 }

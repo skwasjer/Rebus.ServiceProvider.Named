@@ -8,14 +8,5 @@ namespace Rebus.ServiceProvider.Named
     /// </summary>
     public interface INamedBusStarter : IBusStarter
     {
-        /// <summary>
-        /// Starts message processing and returns the bus instance
-        /// </summary>
-        new INamedBus Start();
-
-        /// <summary>
-        /// Gets the bus instance wrapped in this starter. The bus can be used to send, publish, subscribe, etc.
-        /// </summary>
-        new INamedBus Bus { get; }
     }
 }

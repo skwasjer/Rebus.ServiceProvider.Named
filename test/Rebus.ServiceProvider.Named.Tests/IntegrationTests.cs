@@ -160,7 +160,7 @@ namespace Rebus.ServiceProvider.Named
                 {
                     log.Add(s);
                     callbackCallCount++;
-                    if (callbackCallCount >= 2)
+                    if (callbackCallCount >= 3)
                     {
                         eventWasReceived.Set();
                     }

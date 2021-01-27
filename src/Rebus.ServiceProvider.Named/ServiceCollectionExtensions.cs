@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Config;
 using Rebus.Pipeline;
@@ -49,13 +50,13 @@ namespace Rebus.ServiceProvider.Named
             return services
                 .AddNamedRebus(name, configure)
                 // Register the typed bus.
-                .AddSingleton<ITypedBus<TName>>(s => 
+                .AddSingleton<ITypedBus<TName>>(s =>
                     new TypedBus<TName>(s.GetRequiredService<INamedBusFactory>().Get(name))
                 );
         }
 
         /// <summary>
-        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="INamedBus"/> by name.
+        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="IBus"/> by name.
         /// </summary>
         /// <remarks>Note that instance names must be unique.</remarks>
         /// <param name="services">The service collection in which to register the typed bus instance, and in which handlers will be registered.</param>
@@ -73,7 +74,7 @@ namespace Rebus.ServiceProvider.Named
         }
 
         /// <summary>
-        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="INamedBus"/> by name.
+        /// Adds a named Rebus instance. By using named bus instances, you can host multiple Rebus instances and request a specific instance by requesting the <see cref="INamedBusFactory"/> from the service container and then from the factory resolve the desired <see cref="IBus"/> by name.
         /// </summary>
         /// <remarks>Note that instance names must be unique.</remarks>
         /// <param name="services">The service collection in which to register the typed bus instance, and in which handlers will be registered.</param>
@@ -114,16 +115,14 @@ namespace Rebus.ServiceProvider.Named
                 {
                     ConfigureBus = configure,
                     Name = name
-                })
-                // Allow resolving all named/typed bus and starters.
-                .AddSingleton(s => s.GetRequiredService<INamedBusFactory>().Get(name))
-                .AddSingleton(s => s.GetRequiredService<INamedBusFactory>().GetStarter(name));
+                });
 
             return TryAddSharedServices(services);
         }
 
         private static IServiceCollection TryAddSharedServices(this IServiceCollection services)
         {
+            services.TryAddSingleton<IHandlerActivator, DependencyInjectionHandlerActivator>();
             services.TryAddSingleton<INamedBusFactory, NamedBusFactory>();
 
             // In the outer provider, register IBus to resolve from the inner provider.
@@ -152,7 +151,7 @@ namespace Rebus.ServiceProvider.Named
         /// </summary>
         private static IServiceCollection EnsureStandaloneIsNotRegistered(this IServiceCollection services)
         {
-            if (services.Any(descriptor => descriptor.ServiceType == typeof(IBusStarter)))
+            if (services.Any(descriptor => descriptor.ServiceType == typeof(IBus) && descriptor.Lifetime == ServiceLifetime.Singleton))
             {
                 throw new InvalidOperationException(
                     $"A named or typed bus cannot be used in combination with a main bus. Replace the main bus registration (ie.: '.UseRebus()') with a named bus registration, and update usages of {nameof(IBus)} with {nameof(INamedBusFactory)} or {typeof(ITypedBus<>).Name}.");

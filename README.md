@@ -22,28 +22,27 @@ dotnet add package Rebus.ServiceProvider.Named
 
 ## Usage
 
-### IBus vs INamedBus vs ITypedBus<>
+### IBus vs ITypedBus<>
 
-This library introduces a couple of new interfaces to differentiate between `IBus` and named/typed bus instances. The application code will  have to be slightly modified in order to be able to mix and differentiate between multiple buses.
+This library introduces a new bus interface `ITypedBus<>`, derived from `IBus`. The application code may have to be modified slightly in order to be able to mix and differentiate between multiple buses, depending on the use case.
 
-The following bus types can be resolved in/outside message context:
+Below are the differences when resolving either bus type both inside and outside message context:
 
 | Bus type      | Description                                                           | In message context | Outside of message context |
 | ------------- | --------------------------------------------------------------------- | ------------------ | -------------------------- |
 | `IBus`        | Rebus' own bus interface                                                 | Yes                | No*                         |
-| `INamedBus`   | Used icw. `INamedBusFactory`                                          | Yes                | Yes                        |
 | `ITypedBus<>` | Can be used to inject a specific bus instance by using a marker type | Yes                | Yes                        |
 
-> \* This library changes the way the `IBus` type can be resolved from the dependency injection container (it does not change the functional implementation however). See below for more information why it can no longer be used outside of message context.
+> \* :warning: This library changes the way the `IBus` type can be resolved from the dependency injection container (it does not change the functional implementation however). See below for more information why it can no longer be used outside of message context.
 
-### `INamedBus`
+### Resolving a named `IBus` instance with `INamedBusFactory`
 
-Each instance of a named or typed bus is registered as a `INamedBus` in the service container. It subclasses `IBus` to provide seamless transition in application code from `IBus` to `INamedBus`.
+With multiple buses one obvious problem is that is no longer possible to request a specific instance of `IBus` or `IBusStarter` because the dependency injection container no longer knows 'which' instance to inject.
 
-To register a named bus:
+To solve that problem, this library adds a few new registration extensions similar to `.AddRebus()`, and a factory to get the instance:
 
 ```csharp
-class Startup
+public class Startup
 {
     public void ConfigureServices(IServiceCollection services)
     {
@@ -55,19 +54,13 @@ class Startup
 }
 ```
 
-Typically, you will get an instance of a named bus by using `INamedBusFactory` instead of directly injecting it.
-
-### `INamedBusFactory`
-
-With multiple buses one obvious problem is that is no longer possible to request a specific instance of `IBus` or `IBusStarter`, at least, not outside of the scope of a Rebus handler (more on this later).
-
-Instead, inject the `INamedBusFactory` and request the bus instance by name:
+By registering the bus with a name, it now becomes possible to inject the `INamedBusFactory` and request the bus instance by name:
 
 ```csharp
 [ApiController]
 public class MyController : ControllerBase
 {
-    private INamedBus _sqsBus;
+    private IBus _sqsBus;
 
     public MyController(INamedBusFactory namedBusFactory)
     {
@@ -81,9 +74,15 @@ public class MyController : ControllerBase
 }
 ```
 
-### `ITypedBus<>`
+Similarly, the factory can also be used to get an instance of the `IBusStarter`:
 
-While using the factory gives you direct access to all bus instances by name, it is somewhat harder to write unit tests, since the factory now has to be mocked. You can therefor also choose to register a bus as a typed bus which will register the bus as a `ITypedBus<>`:
+```csharp
+_namedBusFactory.GetStarter("sqs-bus");
+```
+
+### Injecting an `ITypedBus<>`
+
+While using the factory gives you direct access to all bus instances by name via the `INamedBusFactory`, it is somewhat harder to write unit tests, since the factory now has to be mocked. You can therefor also choose to register a bus as a typed bus which can then be resolved as a `ITypedBus<>`:
 
 ```csharp
 // Bus name marker class.
@@ -119,14 +118,16 @@ You can also still request the bus by name however:
 
 ```csharp
 // Resolves the same bus but by name
-INamedBus namedBus = _namedBusFactory.Get(nameof(SnsBus));
+IBus snsBus = _namedBusFactory.Get(nameof(SnsBus));
 ```
 
-### Message context and injecting owning IBus
+### Message context and injecting the owning IBus
 
-As mentioned before, injecting the `IBus` outside of a message context is no longer possible when using this library, due to the the fact that the dependency injection container no longer knows which instance to inject.
+As mentioned before, injecting the `IBus` outside of a message context (ie.: whenever `MessageContext.Current` is null) is no longer possible when using this library, due to the the fact that the dependency injection container no longer knows which instance to inject.
 
-It is still possible however to inject a bus of type `IBus` inside of a message context, simply because of the fact that the message is coming from a specific bus instance:
+It is still possible however to inject a bus of type `IBus` inside of a message context, simply because of the fact that the message is coming from a specific bus instance.
+
+Consider this message handler, which when instantiated will have the owning bus injected if we request `IBus`:
 
 ```csharp
 public class MyMessageHandler : IHandleMessages<MyMessage>
@@ -134,6 +135,18 @@ public class MyMessageHandler : IHandleMessages<MyMessage>
     public MyMessageHandler(IBus bus)
     {
         // 'bus' is the instance that MyMessage is consumed from.
+    }
+}
+```
+
+If we would however do the same for example in a controller, an exception would be thrown:
+
+```csharp
+public class MyController : ControllerBase
+{    
+    public MyController(IBus bus)
+    {
+        // The DI container will throw an exception because IBus is not scoped to a message context.
     }
 }
 ```
@@ -196,7 +209,7 @@ public class MyServiceController : ControllerBase
 public class Service1 : IHandleMessages<MyMessage>, IHandleMessages<MyMessageProcessed>
 {
     private readonly ITypedBus<SnsBus> _snsBus;
-    private readonly INamedBus _sqsBus;
+    private readonly IBus _sqsBus;
 
     public Service1(INamedBusFactory busFactory, ITypedBus<SnsBus> snsBus)
     {

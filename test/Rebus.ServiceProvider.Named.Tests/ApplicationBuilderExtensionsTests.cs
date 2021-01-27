@@ -47,6 +47,10 @@ namespace Rebus.ServiceProvider.Named
         [Fact]
         public void Given_that_typed_bus_is_registered_when_using_typed_bus_it_should_not_throw_and_start()
         {
+            _serviceProvider.GetRequiredService<ITypedBus<Bus1>>()
+                .Advanced.Workers.Count.Should()
+                .Be(0);
+
             // Act
             Action act = () => _sut.UseTypedRebus<Bus1>();
 
@@ -61,6 +65,11 @@ namespace Rebus.ServiceProvider.Named
         public void Given_that_named_bus_is_registered_when_using_typed_bus_it_should_not_throw_and_start()
         {
             const string busName = "bus2";
+
+            _serviceProvider.GetRequiredService<INamedBusFactory>()
+                .Get(busName)
+                .Advanced.Workers.Count.Should()
+                .Be(0);
 
             // Act
             Action act = () => _sut.UseNamedRebus(busName);

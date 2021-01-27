@@ -44,14 +44,14 @@ namespace Rebus.ServiceProvider.Named
         [Fact]
         public void When_disposing_it_should_not_call_decorated()
         {
-	        // Act
-	        _sut.Dispose();
+            // Act
+            _sut.Dispose();
 
-	        // Assert
-	        _decoratedBus.Verify(m => m.Dispose(), Times.Never);
+            // Assert
+            _decoratedBus.Verify(m => m.Dispose(), Times.Never);
         }
 
-		[Fact]
+        [Fact]
         public async Task When_sending_local_it_should_call_decorated()
         {
             // Act

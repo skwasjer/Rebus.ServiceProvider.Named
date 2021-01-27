@@ -1,5 +1,6 @@
 ﻿using System;
 using Rebus.Bus;
+using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
 {
@@ -15,7 +16,7 @@ namespace Rebus.ServiceProvider.Named
         /// <returns>Returns a named bus instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown when the name is <see langword="null" />.</exception>
         /// <exception cref="InvalidOperationException">Thrown when no bus instance can be resolved.</exception>
-        INamedBus Get(string name);
+        IBus Get(string name);
 
         /// <summary>
         /// Resolves a Rebus bus starter by name.
@@ -24,6 +25,6 @@ namespace Rebus.ServiceProvider.Named
         /// <returns>Returns a named bus instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown when the name is <see langword="null" />.</exception>
         /// <exception cref="InvalidOperationException">Thrown when no bus instance can be resolved.</exception>
-        INamedBusStarter GetStarter(string name);
+        IBusStarter GetStarter(string name);
     }
 }

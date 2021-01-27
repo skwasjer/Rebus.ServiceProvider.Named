@@ -12,7 +12,7 @@ namespace Rebus.ServiceProvider.Named
     public class NamedBusHandlerActivatorTests
     {
         private static readonly string BusName = "Bus-" + Guid.NewGuid();
-        
+
         private readonly Mock<IHandlerActivator> _handlerActivatorMock;
         private readonly NamedBusHandlerActivator _sut;
 

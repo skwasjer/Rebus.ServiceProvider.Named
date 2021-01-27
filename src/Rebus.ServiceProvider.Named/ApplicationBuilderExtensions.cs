@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Bus;
+using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
 {
@@ -66,7 +67,7 @@ namespace Rebus.ServiceProvider.Named
             }
 
             INamedBusFactory factory = applicationBuilder.ApplicationServices.GetRequiredService<INamedBusFactory>();
-            INamedBusStarter busStarter = factory.GetStarter(name);
+            IBusStarter busStarter = factory.GetStarter(name);
             busStarter.Start();
 
             configureBus?.Invoke(busStarter.Bus);

@@ -24,7 +24,7 @@ namespace Rebus.ServiceProvider.Named
 
         public IBus Get(string name) => ((NamedBusStarter)GetStarter(name)).Bus;
 
-        public INamedBusStarter GetStarter(string name)
+        public IBusStarter GetStarter(string name)
         {
             if (name is null)
             {
@@ -59,7 +59,7 @@ namespace Rebus.ServiceProvider.Named
             // We want to resolve handlers from the outer service container however
             // so replacing the default activator with our own that supports named buses.
             innerServices.Replace(ServiceDescriptor.Singleton<IHandlerActivator>(
-                new NamedBusHandlerActivator(busOptions.Name, new DependencyInjectionHandlerActivator(_serviceProvider))
+                new NamedBusHandlerActivator(busOptions.Name, _serviceProvider.GetRequiredService<IHandlerActivator>())
             ));
 
             Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();

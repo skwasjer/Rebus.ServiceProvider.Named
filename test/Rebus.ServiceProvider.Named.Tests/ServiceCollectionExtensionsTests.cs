@@ -4,6 +4,7 @@ using System.Linq;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Pipeline;
 using Rebus.Transport;
@@ -123,10 +124,9 @@ namespace Rebus.ServiceProvider.Named
             {
                 // Act & assert
                 serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
-                serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+                serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                     .Should()
-                    .AllBeAssignableTo<NamedBusStarter>()
-                    .And.HaveCount(1);
+                    .HaveCount(1);
                 serviceProvider.GetService<IBus>()
                     .Should()
                     .BeOfType<NamedBus>()
@@ -148,10 +148,9 @@ namespace Rebus.ServiceProvider.Named
 
             // Act & assert
             serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
-            serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+            serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                 .Should()
-                .AllBeAssignableTo<NamedBusStarter>()
-                .And.HaveCount(1);
+                .HaveCount(1);
             ((Action)(() => serviceProvider.GetService<IBus>())).Should()
                 .ThrowExactly<InvalidOperationException>()
                 .WithMessage("Attempted to resolve IMessageContext outside of a Rebus handler*");
@@ -175,10 +174,9 @@ namespace Rebus.ServiceProvider.Named
                 // Act & assert
                 serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
                 serviceProvider.GetService<ITypedBus<FakeTypedBusName1>>().Should().BeOfType<TypedBus<FakeTypedBusName1>>();
-                serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+                serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                     .Should()
-                    .AllBeAssignableTo<NamedBusStarter>()
-                    .And.HaveCount(1);
+                    .HaveCount(1);
                 serviceProvider.GetService<IBus>()
                     .Should()
                     .BeOfType<NamedBus>()
@@ -201,10 +199,9 @@ namespace Rebus.ServiceProvider.Named
             // Act & assert
             serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
             serviceProvider.GetService<ITypedBus<FakeTypedBusName1>>().Should().BeOfType<TypedBus<FakeTypedBusName1>>();
-            serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+            serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                 .Should()
-                .AllBeAssignableTo<NamedBusStarter>()
-                .And.HaveCount(1);
+                .HaveCount(1);
             ((Action)(() => serviceProvider.GetService<IBus>())).Should()
                 .ThrowExactly<InvalidOperationException>()
                 .WithMessage("Attempted to resolve IMessageContext outside of a Rebus handler*");
@@ -236,10 +233,9 @@ namespace Rebus.ServiceProvider.Named
                 serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
                 serviceProvider.GetService<ITypedBus<FakeTypedBusName1>>().Should().BeOfType<TypedBus<FakeTypedBusName1>>();
                 serviceProvider.GetService<ITypedBus<FakeTypedBusName2>>().Should().BeOfType<TypedBus<FakeTypedBusName2>>();
-                serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+                serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                     .Should()
-                    .AllBeAssignableTo<NamedBusStarter>()
-                    .And.HaveCount(4);
+                    .HaveCount(4);
                 serviceProvider.GetService<IBus>()
                     .Should()
                     .BeOfType<NamedBus>()
@@ -266,10 +262,9 @@ namespace Rebus.ServiceProvider.Named
             serviceProvider.GetService<INamedBusFactory>().Should().BeOfType<NamedBusFactory>();
             serviceProvider.GetService<ITypedBus<FakeTypedBusName1>>().Should().BeOfType<TypedBus<FakeTypedBusName1>>();
             serviceProvider.GetService<ITypedBus<FakeTypedBusName2>>().Should().BeOfType<TypedBus<FakeTypedBusName2>>();
-            serviceProvider.GetService<IEnumerable<INamedBusStarter>>()
+            serviceProvider.GetService<IEnumerable<NamedBusOptions>>()
                 .Should()
-                .AllBeAssignableTo<NamedBusStarter>()
-                .And.HaveCount(4);
+                .HaveCount(4);
             ((Action)(() => serviceProvider.GetService<IBus>())).Should()
                 .ThrowExactly<InvalidOperationException>()
                 .WithMessage("Attempted to resolve IMessageContext outside of a Rebus handler*");
@@ -365,8 +360,8 @@ namespace Rebus.ServiceProvider.Named
 
                         break;
                     default:
+                        yield return new object[] { act, ServiceDescriptor.Singleton<IHandlerActivator, DependencyInjectionHandlerActivator>() };
                         yield return new object[] { act, ServiceDescriptor.Singleton<INamedBusFactory, NamedBusFactory>() };
-                        yield return new object[] { act, ServiceDescriptor.Singleton(_ => Mock.Of<INamedBusStarter>()) };
                         yield return new object[] { act, ServiceDescriptor.Scoped(_ => Mock.Of<IBus>()) };
                         yield return new object[] { act, ServiceDescriptor.Transient(_ => Mock.Of<IMessageContext>()) };
 

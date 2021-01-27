@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Rebus.Activation;
 using Rebus.Bus;
+using Rebus.Config;
 using Rebus.Pipeline;
 using Xunit;
 
@@ -43,6 +45,7 @@ namespace Rebus.ServiceProvider.Named
             _serviceProvider = new ServiceCollection()
                 .AddTransient(_ => MessageContext.Current)
                 .AddRebusHandler(_ => _messageHandler)
+                .AddSingleton<IHandlerActivator, DependencyInjectionHandlerActivator>()
                 .BuildServiceProvider();
 
             _sut = new NamedBusFactory(_namedBusOptions, _serviceProvider);
@@ -121,7 +124,7 @@ namespace Rebus.ServiceProvider.Named
             };
 
             // Act
-            INamedBusStarter actual = _sut.GetStarter(busName);
+            IBusStarter actual = _sut.GetStarter(busName);
             IBus bus = actual.Start();
 
             await bus.SendLocal(new FakeMessage());

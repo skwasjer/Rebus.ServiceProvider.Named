@@ -4,7 +4,7 @@ using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
 {
-    internal class NamedBusStarter : INamedBusStarter
+    internal class NamedBusStarter : IBusStarter
     {
         private readonly IBusStarter _originalBusStarter;
 

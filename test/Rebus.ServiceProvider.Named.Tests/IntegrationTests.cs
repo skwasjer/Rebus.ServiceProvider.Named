@@ -27,7 +27,7 @@ namespace Rebus.ServiceProvider.Named
         private readonly Microsoft.Extensions.DependencyInjection.ServiceProvider _serviceProvider;
         private readonly Mock<Action<string>> _callbackMock;
 
-        public class Service1 : IHandleMessages<MyMessageProcessed>, IHandleMessages<MyMessage>
+        public class Service1 : IHandleMessages<MyMessage>, IHandleMessages<MyMessageProcessed>
         {
             private readonly ITypedBus<Bus2> _bus2;
             private readonly IBus _bus1;
@@ -73,6 +73,26 @@ namespace Rebus.ServiceProvider.Named
             }
         }
 
+        public class Service1EventHandler : IHandleMessages<MyMessageProcessed>
+        {
+            private readonly IBus _bus;
+            private readonly Action<string> _callback;
+
+            public Service1EventHandler(IBus bus, Action<string> messageCallback)
+            {
+                _bus = bus;
+                _callback = messageCallback;
+            }
+
+            public Task Handle(MyMessageProcessed message)
+            {
+                _callback?.Invoke($"event also handled by: {_bus}");
+
+                // Received through Bus2, message has been processed.
+                return Task.CompletedTask;
+            }
+        }
+
         public IntegrationTests(ITestOutputHelper testOutputHelper)
         {
             _callbackMock = new Mock<Action<string>>();
@@ -81,6 +101,7 @@ namespace Rebus.ServiceProvider.Named
                 .AddSingleton(_callbackMock.Object)
                 .AddTransient<Service1>()
                 .AddRebusHandler<Service1>()
+                .AddRebusHandler<Service1EventHandler>()
 
                 .AddNamedRebus("bus1", c => c
                     .Logging(l => l.Use(new RebusTestLoggerFactory(testOutputHelper)))
@@ -155,12 +176,11 @@ namespace Rebus.ServiceProvider.Named
             // Assert
             eventWasReceived.WaitOne(TimeSpan.FromSeconds(30));
             log.Should()
-                .BeEquivalentTo(new[]
-                    {
-                        "command handled by: RebusBus bus1",
-                        "event handled by: RebusBus Bus2"
-                    },
-                    opts => opts.WithStrictOrdering());
+                .BeEquivalentTo(
+                    "command handled by: RebusBus bus1",
+                    "event handled by: RebusBus Bus2",
+                    "event also handled by: RebusBus Bus2"
+                );
         }
 
         public void Dispose()

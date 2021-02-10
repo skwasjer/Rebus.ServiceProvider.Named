@@ -13,13 +13,13 @@ namespace Rebus.ServiceProvider.Named
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<string, NamedBusOptions> _busOptions;
-        private readonly Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)> _buses;
+        private readonly Dictionary<string, BusInstance> _buses;
 
         public NamedBusFactory(IEnumerable<NamedBusOptions> busOptions, IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _busOptions = busOptions?.ToDictionary(b => b.Name) ?? throw new ArgumentNullException(nameof(busOptions));
-            _buses = new Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)>();
+            _buses = new Dictionary<string, BusInstance>();
         }
 
         public IBus Get(string name) => ((NamedBusStarter)GetStarter(name)).Bus;
@@ -31,20 +31,20 @@ namespace Rebus.ServiceProvider.Named
                 throw new ArgumentNullException(nameof(name));
             }
 
-            if (_buses.TryGetValue(name, out (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter) v))
+            if (_buses.TryGetValue(name, out BusInstance v))
             {
-                return v.Item2;
+                return v.BusStarter;
             }
 
             if (_busOptions.TryGetValue(name, out NamedBusOptions busOptions))
             {
-                return (_buses[name] = CreateBusStarter(busOptions)).Item2;
+                return (_buses[name] = CreateBusStarter(busOptions)).BusStarter;
             }
 
             throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
         }
 
-        private (Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider, NamedBusStarter namedBusStarter) CreateBusStarter(NamedBusOptions busOptions)
+        private BusInstance CreateBusStarter(NamedBusOptions busOptions)
         {
             // Use a new service container to mount this Rebus instance.
             IServiceCollection innerServices = new ServiceCollection()
@@ -62,9 +62,9 @@ namespace Rebus.ServiceProvider.Named
                 new NamedBusHandlerActivator(busOptions.Name, _serviceProvider.GetRequiredService<IHandlerActivator>())
             ));
 
-            Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();
+            IServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();
             IBusStarter busStarter = innerServiceProvider.GetRequiredService<IBusStarter>();
-            return (innerServiceProvider, CreateBusStarter(busOptions, busStarter));
+            return new BusInstance(innerServiceProvider, CreateBusStarter(busOptions, busStarter));
         }
 
         private static NamedBusStarter CreateBusStarter(NamedBusOptions busOptions, IBusStarter busStarter)
@@ -74,10 +74,29 @@ namespace Rebus.ServiceProvider.Named
 
         public void Dispose()
         {
-            foreach ((Microsoft.Extensions.DependencyInjection.ServiceProvider s, NamedBusStarter bs) in _buses.Values)
+            foreach (BusInstance busInstance in _buses.Values)
             {
-                ((NamedBus)bs.Bus).InnerBus.Dispose();
-                s.Dispose();
+                busInstance.Dispose();
+            }
+        }
+
+        private class BusInstance : IDisposable
+        {
+            private readonly IServiceProvider _serviceProvider;
+            private readonly NamedBusStarter _busStarter;
+
+            public BusInstance(IServiceProvider serviceProvider, NamedBusStarter busStarter)
+            {
+                _serviceProvider = serviceProvider;
+                _busStarter = busStarter;
+            }
+
+            public IBusStarter BusStarter => _busStarter;
+
+            public void Dispose()
+            {
+                ((NamedBus)_busStarter.Bus).InnerBus.Dispose();
+                (_serviceProvider as IDisposable)?.Dispose();
             }
         }
     }

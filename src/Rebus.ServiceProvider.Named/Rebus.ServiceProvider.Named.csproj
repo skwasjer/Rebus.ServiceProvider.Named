@@ -6,8 +6,12 @@
 
   <PropertyGroup>
     <Description>Provides named bus instance support for Rebus, enabling hosting of multiple instances.</Description>
-    <PackageProjectUrl>https://github.com/skwasjer/Rebus.ServiceProvider.Named/wiki</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/skwasjer/Rebus.ServiceProvider.Named</PackageProjectUrl>
     <PackageTags>rebus service-provider ioc dependency-injection</PackageTags>
+    <PackageReleaseNotes>
+      v0.3.0
+      - fix: Ensure thread safe bus creation
+    </PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

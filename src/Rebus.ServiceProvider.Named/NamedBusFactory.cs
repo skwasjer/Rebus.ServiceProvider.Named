@@ -9,42 +9,64 @@ using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
 {
-    internal class NamedBusFactory : INamedBusFactory, IDisposable
+    internal sealed class NamedBusFactory : INamedBusFactory, IDisposable
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<string, NamedBusOptions> _busOptions;
-        private readonly Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)> _buses;
+        private readonly Dictionary<string, BusInstance> _buses;
+        private readonly object _syncLock = new object();
+        private bool _disposed;
 
         public NamedBusFactory(IEnumerable<NamedBusOptions> busOptions, IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _busOptions = busOptions?.ToDictionary(b => b.Name) ?? throw new ArgumentNullException(nameof(busOptions));
-            _buses = new Dictionary<string, (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter)>();
+            _buses = new Dictionary<string, BusInstance>();
+        }
+
+        ~NamedBusFactory()
+        {
+            Dispose(false);
         }
 
         public IBus Get(string name) => ((NamedBusStarter)GetStarter(name)).Bus;
 
         public IBusStarter GetStarter(string name)
         {
+            CheckIfDisposed();
+
             if (name is null)
             {
                 throw new ArgumentNullException(nameof(name));
             }
 
-            if (_buses.TryGetValue(name, out (Microsoft.Extensions.DependencyInjection.ServiceProvider, NamedBusStarter) v))
+            // ReSharper disable once InconsistentlySynchronizedField : justification - we check again
+            // later inside a sync block. This is just to short-circuit.
+            if (_buses.TryGetValue(name, out BusInstance busInstance))
             {
-                return v.Item2;
+                return busInstance.BusStarter;
             }
 
-            if (_busOptions.TryGetValue(name, out NamedBusOptions busOptions))
+            if (!_busOptions.TryGetValue(name, out NamedBusOptions busOptions))
             {
-                return (_buses[name] = CreateBusStarter(busOptions)).Item2;
+                throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
             }
 
-            throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
+            lock (_syncLock)
+            {
+                // Try one more time to find bus, or otherwise create the instance.
+                if (_buses.TryGetValue(name, out busInstance))
+                {
+                    return busInstance.BusStarter;
+                }
+
+                busInstance = CreateBusStarter(busOptions);
+                _buses.Add(name, busInstance);
+                return busInstance.BusStarter;
+            }
         }
 
-        private (Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider, NamedBusStarter namedBusStarter) CreateBusStarter(NamedBusOptions busOptions)
+        private BusInstance CreateBusStarter(NamedBusOptions busOptions)
         {
             // Use a new service container to mount this Rebus instance.
             IServiceCollection innerServices = new ServiceCollection()
@@ -62,9 +84,9 @@ namespace Rebus.ServiceProvider.Named
                 new NamedBusHandlerActivator(busOptions.Name, _serviceProvider.GetRequiredService<IHandlerActivator>())
             ));
 
-            Microsoft.Extensions.DependencyInjection.ServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();
+            IServiceProvider innerServiceProvider = innerServices.BuildServiceProvider();
             IBusStarter busStarter = innerServiceProvider.GetRequiredService<IBusStarter>();
-            return (innerServiceProvider, CreateBusStarter(busOptions, busStarter));
+            return new BusInstance(innerServiceProvider, CreateBusStarter(busOptions, busStarter));
         }
 
         private static NamedBusStarter CreateBusStarter(NamedBusOptions busOptions, IBusStarter busStarter)
@@ -72,12 +94,58 @@ namespace Rebus.ServiceProvider.Named
             return new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus));
         }
 
+        private void CheckIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException("Object is already disposed.");
+            }
+        }
+
         public void Dispose()
         {
-            foreach ((Microsoft.Extensions.DependencyInjection.ServiceProvider s, NamedBusStarter bs) in _buses.Values)
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_disposed)
             {
-                ((NamedBus)bs.Bus).InnerBus.Dispose();
-                s.Dispose();
+                return;
+            }
+
+            if (disposing)
+            {
+                lock (_syncLock)
+                {
+                    foreach (BusInstance busInstance in _buses.Values)
+                    {
+                        busInstance.Dispose();
+                    }
+                }
+            }
+
+            _disposed = true;
+        }
+
+        private class BusInstance : IDisposable
+        {
+            private readonly IServiceProvider _serviceProvider;
+            private readonly NamedBusStarter _busStarter;
+
+            public BusInstance(IServiceProvider serviceProvider, NamedBusStarter busStarter)
+            {
+                _serviceProvider = serviceProvider;
+                _busStarter = busStarter;
+            }
+
+            public IBusStarter BusStarter => _busStarter;
+
+            public void Dispose()
+            {
+                ((NamedBus)_busStarter.Bus).InnerBus.Dispose();
+                (_serviceProvider as IDisposable)?.Dispose();
             }
         }
     }

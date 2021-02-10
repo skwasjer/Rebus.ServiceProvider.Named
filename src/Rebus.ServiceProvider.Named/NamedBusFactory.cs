@@ -9,11 +9,13 @@ using Rebus.Config;
 
 namespace Rebus.ServiceProvider.Named
 {
-    internal class NamedBusFactory : INamedBusFactory, IDisposable
+    internal sealed class NamedBusFactory : INamedBusFactory, IDisposable
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly Dictionary<string, NamedBusOptions> _busOptions;
         private readonly Dictionary<string, BusInstance> _buses;
+        private readonly object _syncLock = new object();
+        private bool _disposed;
 
         public NamedBusFactory(IEnumerable<NamedBusOptions> busOptions, IServiceProvider serviceProvider)
         {
@@ -22,26 +24,46 @@ namespace Rebus.ServiceProvider.Named
             _buses = new Dictionary<string, BusInstance>();
         }
 
+        ~NamedBusFactory()
+        {
+            Dispose(false);
+        }
+
         public IBus Get(string name) => ((NamedBusStarter)GetStarter(name)).Bus;
 
         public IBusStarter GetStarter(string name)
         {
+            CheckIfDisposed();
+
             if (name is null)
             {
                 throw new ArgumentNullException(nameof(name));
             }
 
-            if (_buses.TryGetValue(name, out BusInstance v))
+            // ReSharper disable once InconsistentlySynchronizedField : justification - we check again
+            // later inside a sync block. This is just to short-circuit.
+            if (_buses.TryGetValue(name, out BusInstance busInstance))
             {
-                return v.BusStarter;
+                return busInstance.BusStarter;
             }
 
-            if (_busOptions.TryGetValue(name, out NamedBusOptions busOptions))
+            if (!_busOptions.TryGetValue(name, out NamedBusOptions busOptions))
             {
-                return (_buses[name] = CreateBusStarter(busOptions)).BusStarter;
+                throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
             }
 
-            throw new InvalidOperationException($"Bus with name '{name}' does not exist.");
+            lock (_syncLock)
+            {
+                // Try one more time to find bus, or otherwise create the instance.
+                if (_buses.TryGetValue(name, out busInstance))
+                {
+                    return busInstance.BusStarter;
+                }
+
+                busInstance = CreateBusStarter(busOptions);
+                _buses.Add(name, busInstance);
+                return busInstance.BusStarter;
+            }
         }
 
         private BusInstance CreateBusStarter(NamedBusOptions busOptions)
@@ -72,12 +94,39 @@ namespace Rebus.ServiceProvider.Named
             return new NamedBusStarter(busStarter, new NamedBus(busOptions.Name, busStarter.Bus));
         }
 
+        private void CheckIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException("Object is already disposed.");
+            }
+        }
+
         public void Dispose()
         {
-            foreach (BusInstance busInstance in _buses.Values)
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_disposed)
             {
-                busInstance.Dispose();
+                return;
             }
+
+            if (disposing)
+            {
+                lock (_syncLock)
+                {
+                    foreach (BusInstance busInstance in _buses.Values)
+                    {
+                        busInstance.Dispose();
+                    }
+                }
+            }
+
+            _disposed = true;
         }
 
         private class BusInstance : IDisposable

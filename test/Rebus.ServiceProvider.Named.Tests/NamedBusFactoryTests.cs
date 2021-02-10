@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -167,6 +168,83 @@ namespace Rebus.ServiceProvider.Named
             bus1.Advanced.Workers.Count.Should().Be(0);
             bus2.Advanced.Workers.Count.Should().Be(0);
             bus3.Advanced.Workers.Count.Should().Be(0);
+        }
+
+        [Fact]
+        public void Given_that_factory_is_disposed_when_getting_starter_it_should_throw()
+        {
+            _sut.Dispose();
+
+            // Act
+            Action act = () => _sut.GetStarter("bus1");
+
+            // Assert
+            act.Should().ThrowExactly<ObjectDisposedException>();
+        }
+
+        [Fact]
+        public void Given_that_factory_is_disposed_when_getting_bus_it_should_throw()
+        {
+            _sut.Dispose();
+
+            // Act
+            Action act = () => _sut.Get("bus1");
+
+            // Assert
+            act.Should().ThrowExactly<ObjectDisposedException>();
+        }
+
+        [Fact]
+        public async Task Given_that_bus_is_in_process_of_being_created_when_requesting_same_bus_by_name_it_should_not_create_another_instance()
+        {
+            using var cts = new CancellationTokenSource(2000);
+            using Microsoft.Extensions.DependencyInjection.ServiceProvider serviceProvider = new ServiceCollection()
+                .AddTransient(_ => MessageContext.Current)
+                .AddRebusHandler(_ => _messageHandler)
+                .AddSingleton<IHandlerActivator, DependencyInjectionHandlerActivator>()
+                .BuildServiceProvider();
+
+            int builderCallCount = 0;
+            using var sut = new NamedBusFactory(new[]
+            {
+                new NamedBusOptions
+                {
+                    Name = "test",
+                    ConfigureBus = (configurer, provider) =>
+                    {
+                        // Force sleep on this thread.
+                        Thread.Sleep(1000);
+                        builderCallCount++;
+                        return MemoryBusConfigurationHelper.ConfigureForInMemWithSp(configurer, provider);
+                    }
+                }
+            }, serviceProvider);
+
+            Task<IBus> GetInstanceFromThreadAsync(CancellationToken cancellationToken)
+            {
+                return Task.Factory.StartNew(
+                    () => sut.Get("test"),
+                    cancellationToken,
+                    TaskCreationOptions.LongRunning | TaskCreationOptions.RunContinuationsAsynchronously,
+                    TaskScheduler.FromCurrentSynchronizationContext());
+            }
+
+            IBus[] instances = await Task.WhenAll(
+                GetInstanceFromThreadAsync(cts.Token),
+                GetInstanceFromThreadAsync(cts.Token),
+                GetInstanceFromThreadAsync(cts.Token),
+                GetInstanceFromThreadAsync(cts.Token));
+            IBus busAfter = sut.Get("test");
+
+            builderCallCount.Should().Be(1);
+            busAfter.Should().NotBeNull();
+            instances.Should()
+                .NotBeEmpty()
+                .And.AllBeAssignableTo<IBus>()
+                .And.Subject.Distinct()
+                .Should()
+                .HaveCount(1)
+                .And.BeEquivalentTo(busAfter);
         }
 
         public void Dispose()

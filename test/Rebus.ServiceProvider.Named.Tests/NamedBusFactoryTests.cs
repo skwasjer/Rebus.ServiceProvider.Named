@@ -197,7 +197,7 @@ namespace Rebus.ServiceProvider.Named
         [Fact]
         public async Task Given_that_bus_is_in_process_of_being_created_when_requesting_same_bus_by_name_it_should_not_create_another_instance()
         {
-            using var cts = new CancellationTokenSource(2000);
+            using var cts = new CancellationTokenSource(25000);
             using Microsoft.Extensions.DependencyInjection.ServiceProvider serviceProvider = new ServiceCollection()
                 .AddTransient(_ => MessageContext.Current)
                 .AddRebusHandler(_ => _messageHandler)

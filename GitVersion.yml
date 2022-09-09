@@ -1,7 +1,0 @@
-assembly-versioning-scheme: MajorMinorPatch
-mode: Mainline
-continuous-delivery-fallback-tag: ''
-branches:
-  master: {}
-ignore:
-  sha: []
